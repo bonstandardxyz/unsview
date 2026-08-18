@@ -28,15 +28,20 @@ jobs:
     container: condaforge/linux-anvil-x86_64:alma9
     env:
       ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+    defaults:
+      run:
+        # A login shell, matching osx-arm64. Without it GitHub runs each step
+        # under `sh -e`, which never sources /opt/conda/etc/profile.d/conda.sh,
+        # so nothing in the image's conda prefix -- conda and git alike -- is on
+        # PATH and every step dies with 127 before the build starts.
+        shell: bash -el {0}
     steps:
       - uses: actions/checkout@v4
       - name: Mark workspace safe for git
-        # The alma9 conda-forge image ships no git, so actions/checkout falls
-        # back to a tarball download and leaves no .git to mark safe -- the bare
-        # command exits 127 and fails the job before it ever builds. Nothing
-        # here needs git (the version is literal, the source is a local path),
-        # so tolerate its absence while keeping the guard for images that do
-        # have it.
+        # Quiets git's dubious-ownership refusal when the checkout uid differs
+        # from the container's. Tolerant of a missing git because nothing here
+        # needs it: the version is a literal in meta.yaml and the source is a
+        # local path.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
       - name: Install conda-build
         run: conda install -y -n base -c conda-forge conda-build anaconda-client
