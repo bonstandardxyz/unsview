@@ -136,6 +136,11 @@ jobs:
       - name: Attach them to the release
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job never checks the repo out -- it only needs the two build
+          # artifacts -- so gh has no git remote to infer the repository from
+          # and fails with "not a git repository". Naming it explicitly is
+          # cheaper than cloning the tree just to satisfy that lookup.
+          GH_REPO: ${{ github.repository }}
         # A tag push does not create a release by itself, so make one if it is
         # not already there. --clobber lets a re-run replace assets rather than
         # failing on a name that already exists.
