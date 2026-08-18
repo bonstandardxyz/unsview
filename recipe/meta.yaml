@@ -1,0 +1,135 @@
+{% set name = "unsview" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  # Local-checkout build, for iterating without tagging a release.
+  #
+  # BEFORE SUBMITTING TO conda-forge: replace the `path` line below with the
+  # tagged GitHub tarball + sha256. conda-forge builds from tarballs only, never
+  # from a local path or a repo checkout.
+  #
+  #   url: https://github.com/bonstandardxyz/unsview/archive/refs/tags/v{{ version }}.tar.gz
+  #   sha256: <shasum -a 256 of that tarball>
+  path: ..
+
+build:
+  number: 0
+  skip: true  # [win]
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - make
+  host:
+    - libnetcdf
+    - libpng
+    # X11 stack — every unix platform. conda-forge ships osx-64/osx-arm64
+    # builds of the whole Xaw stack, so the GUI is compiled in on macOS too;
+    # it just needs XQuartz running to supply the X *server* at runtime,
+    # since these packages are client libraries only.
+    - xorg-libxaw
+    - xorg-libxt
+    - xorg-libx11
+    - xorg-libxmu
+    - xorg-libxext
+    - xorg-libsm
+    - xorg-libice
+    - xorg-xorgproto
+  run:
+    # libnetcdf and libpng are intentionally omitted — both export run_exports,
+    # so conda-build pins them automatically from the host section above.
+    - xorg-libxaw
+    - xorg-libxt
+    - xorg-libx11
+    - xorg-libxmu
+    - xorg-libxext
+
+test:
+  # synthetic{,_icon,_ugrid}.nc are one tiny mesh and one field in three
+  # encodings; synthetic_cs.nc is a cubed sphere carrying the same field on a
+  # different mesh. Committed so every platform exercises the full render path
+  # and all five readers here -- not just `-h`. --no-rc keeps a stray
+  # ~/.unsviewrc on the build machine from changing what gets rendered.
+  source_files:
+    - samples/synthetic.nc
+    - samples/synthetic_icon.nc
+    - samples/synthetic_ugrid.nc
+    - samples/synthetic_cs.nc
+    - samples/synthetic_cs_centers.nc
+    - samples/synthetic_fvcom.nc
+  commands:
+    - unsview -h
+    - test -f $PREFIX/share/unsview/coastlines_110m.txt   # [unix]
+    # The fixtures must ship *inside* the package, not merely exist in the build
+    # tree: source_files below puts them in this test env either way, so without
+    # these two lines a package that installs none of them still passes, and a
+    # `conda install` user cannot run a single check from README.md.
+    - test -f $PREFIX/share/unsview/samples/synthetic.nc                   # [unix]
+    - unsview --no-rc $PREFIX/share/unsview/samples/synthetic_cs_centers.nc -v wave -t 0 -o inst.png   # [unix]
+    - test -s inst.png                                                     # [unix]
+    - unsview --no-rc samples/synthetic.nc -v wave -t 0 -o mpas.png
+    - test -s mpas.png
+    - unsview --no-rc samples/synthetic_icon.nc -v wave -t 0 -o icon.png
+    - test -s icon.png
+    - unsview --no-rc samples/synthetic_ugrid.nc -v wave -t 0 -o ugrid.png
+    - test -s ugrid.png
+    - unsview --no-rc samples/synthetic_cs.nc -v wave -t 0 -o cs.png
+    - test -s cs.png
+    # a cubed sphere carrying centers but no corners -- what operational GEOS
+    # ships -- must have its cell boundaries reconstructed rather than refused
+    - unsview --no-rc samples/synthetic_cs_centers.nc -v wave -t 0 -o csc.png
+    - test -s csc.png
+    - unsview --no-rc samples/synthetic_fvcom.nc -v wave -t 0 -o fvcom.png
+    - test -s fvcom.png
+    # node-centered data must be averaged onto faces, not rejected
+    - unsview --no-rc samples/synthetic_ugrid.nc -v wave_node -t 0 -o node.png
+    - test -s node.png
+    # The GUI must actually be compiled in. A headless binary installs fine and
+    # renders every PNG above, so nothing else here would notice it -- the bug
+    # only surfaces when a user omits -o and gets told to use -o. Emptying
+    # DISPLAY makes this deterministic: it can never find a server, so it can
+    # never open a window and stall the build, and a GUI binary then fails in
+    # X ("Can't open display") rather than in the not-compiled-in branch.
+    - DISPLAY= unsview --no-rc samples/synthetic.nc -v wave > gui.log 2>&1 || true   # [unix]
+    - "! grep -q 'GUI not compiled in' gui.log"                                      # [unix]
+
+about:
+  home: https://github.com/bonstandardxyz/unsview
+  license: MIT
+  license_family: MIT
+  license_file: LICENSE
+  summary: Unstructured-mesh viewer (MPAS, ICON, CF-UGRID, cubed sphere, FVCOM) with X11 GUI and headless PNG mode
+  description: |
+    unsview is a small native C viewer for unstructured-mesh netCDF files.
+    It reads MPAS, ICON, CF-UGRID, cubed-sphere (GEOS, FV3) and FVCOM meshes
+    -- CF-UGRID alone covers SCHISM, FESOM, ADCIRC and D-Flow FM output --
+    detecting the convention automatically, or on request via `--model`. It renders mesh polygons
+    directly without a remap step, runs interactively over `ssh -Y` via
+    X11/Xaw, and offers a headless PNG mode for batch QC on HPC
+    compute nodes. Designed as an `ncview`-class tool for unstructured
+    grids.
+
+    Fields stored on mesh nodes rather than cell centers, as ocean models
+    commonly do, are averaged onto faces so they render like any other.
+
+    Defaults can be kept in a `.unsviewrc` file; anything on the command
+    line overrides them.
+
+    Note on platforms: the interactive X11/Xaw GUI is compiled in on both
+    Linux and macOS. The conda X11 packages are client libraries only, so
+    on macOS the GUI also needs an X server -- install XQuartz
+    (`brew install --cask xquartz`) and log out and back in once. Headless
+    PNG output via `-o` needs no display on any platform.
+
+    Bundled coastline, country-border, and state/province overlay files are
+    derived from Natural Earth (naturalearthdata.com) and are in the public
+    domain. The MIT license above applies to the source code.
+  dev_url: https://github.com/bonstandardxyz/unsview
+
+extra:
+  recipe-maintainers:
+    - bonstandardxyz
