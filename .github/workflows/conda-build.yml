@@ -98,3 +98,49 @@ jobs:
       - name: Upload to anaconda.org
         if: startsWith(github.ref, 'refs/tags/v') && env.ANACONDA_TOKEN != ''
         run: anaconda -t "$ANACONDA_TOKEN" upload --force build-artifacts/osx-arm64/*.conda
+
+  release:
+    # Attach both packages to the GitHub Release, so anyone can download them
+    # with plain curl. The build jobs already publish Actions artifacts, but
+    # fetching one of those needs an authenticated token even on a public repo
+    # (an anonymous request gets HTTP 401) -- release assets have no such
+    # restriction, and requiring an account to download from a public project
+    # is a bad deal. This runs on the bare runner rather than inside either
+    # build job: the alma9 container has no gh, and doing it once here covers
+    # both platforms after both have succeeded.
+    needs: [linux-64, osx-arm64]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      # The repository default is read-only, so creating and uploading to a
+      # release must be requested explicitly. Nothing else needs write.
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Name the packages after their platform
+        # conda names files by build hash -- unsview-0.1.0-h9bf148f_0.conda and
+        # unsview-0.1.0-h8a0c2ca_0.conda -- which tells a downloader nothing
+        # about which is which. Rename to the platform subdir instead. conda
+        # installs a renamed file happily: it reads name/version/build from the
+        # metadata inside the package, not from the filename.
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p upload
+          for d in dist/conda-*; do
+              sub="${d#dist/conda-}"
+              cp "$d"/*.conda "upload/unsview-${VERSION}-${sub}.conda"
+          done
+          ls -l upload
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # A tag push does not create a release by itself, so make one if it is
+        # not already there. --clobber lets a re-run replace assets rather than
+        # failing on a name that already exists.
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" \
+                  --title "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" upload/*.conda --clobber
