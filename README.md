@@ -819,3 +819,11 @@ cc -O2 -I$(brew --prefix netcdf)/include -L$(brew --prefix netcdf)/lib \
    -o tests/check_corners tests/check_corners.c -lnetcdf -lm
 #     ^ or make_sample / strip_mesh, same line otherwise
 ```
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+The bundled coastline, border, and state overlays in `samples/*.txt` are derived
+from [Natural Earth](https://www.naturalearthdata.com/), which is public domain
+and not covered by the MIT license above.
