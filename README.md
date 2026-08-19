@@ -31,9 +31,14 @@ unsview -h                    # options; --model lists the conventions
 > package from a checkout — the result is the same package:
 >
 > ```sh
+> git clone https://github.com/bonstandardxyz/unsview.git && cd unsview
 > conda build recipe -c conda-forge
 > conda create -n unsview -c local -c conda-forge unsview
 > ```
+>
+> `./conda_test.sh` does the same thing and then asserts the result — build,
+> install into a scratch env, render every fixture, confirm the GUI is compiled
+> in. It prints `PASS`.
 
 The fixtures install into the environment, so set this once and every command
 below works as written:
@@ -677,6 +682,8 @@ All of these are present on every HPC login node and on macOS via Homebrew
 (`netcdf`, `libpng`) + XQuartz (X11/Xt/Xaw).
 
 ```sh
+git clone https://github.com/bonstandardxyz/unsview.git && cd unsview
+
 # macOS
 brew install netcdf libpng
 brew install --cask xquartz          # the GUI needs this
