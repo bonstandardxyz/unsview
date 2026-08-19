@@ -65,7 +65,8 @@ ifeq ($(origin HAVE_X11),undefined)
         $(XAW_PREFIX)/lib/libXaw.* \
         $(X11_PREFIX)/lib/libXaw.* \
         /usr/lib/libXaw.* /usr/lib64/libXaw.* \
-        /usr/lib/x86_64-linux-gnu/libXaw.*))
+        /usr/lib/x86_64-linux-gnu/libXaw.* \
+        /usr/lib/aarch64-linux-gnu/libXaw.*))
     ifneq ($(X11_HDR),)
     ifneq ($(X11_LIB),)
         HAVE_X11 := 1

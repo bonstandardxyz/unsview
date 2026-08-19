@@ -683,6 +683,11 @@ brew install --cask xquartz          # the GUI needs this
 make
 make install DEST=$HOME/.local       # binary, overlays and fixtures
 
+# Debian / Ubuntu, x86_64 or arm64 (incl. ChromeOS Crostini)
+sudo apt install libnetcdf-dev libpng-dev libxaw7-dev
+make
+make install DEST=$HOME/.local
+
 # Linux / HPC, user-space
 module load netcdf gcc               # adjust to your site
 make NETCDF_PREFIX=$NETCDF
@@ -693,6 +698,15 @@ make install DEST=$HOME/.local
 finishes with `X11 GUI: enabled` or `disabled`; when it is disabled it also
 prints how to fix it, because a headless binary installs and renders PNGs
 perfectly well and would otherwise go unnoticed until someone omits `-o`.
+
+Detection looks for `libXaw` in the usual prefixes plus the Debian/Ubuntu
+multiarch directories for both `x86_64` and `aarch64`. On any other layout it
+finds nothing and quietly drops the GUI, so force it and let a missing Xaw be a
+build error instead:
+
+```sh
+make HAVE_X11=1
+```
 
 `make install` puts the fixtures under `DEST/share/unsview/samples`, so `$S`
 works the same way it does under conda:
