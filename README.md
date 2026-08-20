@@ -22,13 +22,27 @@ The conda package is the default way in. It carries the X11 GUI on both Linux
 and macOS, the coastline overlays, and all six test fixtures:
 
 ```sh
-conda create -n unsview -c conda-forge unsview
+conda create -n unsview -c bonstandardxyz unsview
 conda activate unsview
 unsview -h                    # options; --model lists the conventions
 ```
 
-> **Not on conda-forge yet.** Until the first release lands there, build the
-> package from a checkout — the result is the same package:
+To add it to an environment you already have, rather than a dedicated one:
+
+```sh
+conda install -c bonstandardxyz unsview             # into the active env
+conda install -n myenv -c bonstandardxyz unsview    # into a named one
+```
+
+On miniforge that is the whole command, since conda-forge is already its
+default channel. On Anaconda or Miniconda add `-c conda-forge` as well — the
+dependencies (`libnetcdf`, `libpng`, the `xorg-*` stack) resolve from there.
+`conda config --add channels bonstandardxyz` once, and the `-c` flag stops
+being necessary at all.
+
+> **linux-64 and osx-arm64 only, and not on conda-forge yet.** On any other
+> platform — linux-aarch64 included — build the package from a checkout. The
+> result is the same package:
 >
 > ```sh
 > git clone https://github.com/bonstandardxyz/unsview.git && cd unsview
