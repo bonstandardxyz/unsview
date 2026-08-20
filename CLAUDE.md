@@ -84,8 +84,16 @@ instructions drifted apart when they were two.
 Fastest single check that rendering still works end to end:
 
 ```sh
-./unsview --no-rc samples/synthetic.nc -v wave -t 0 -o /tmp/wave.png
+./unsview --no-rc samples/synthetic.nc -v wave -t 0 -o wave.png
 ```
+
+`tests/run_all_readers.sh` also renders one real file per reader from
+`samples/testdata/` when that directory has been populated, and skips those lines
+cleanly when it has not -- so it stays the no-network check while still covering
+files real models wrote. It asserts detected model, which `--check` does not.
+
+None of the scripts write to `/tmp`: they use `$TMPDIR` when the site sets one and
+otherwise the checkout, because `/tmp` is not writable on many HPC nodes.
 
 `tests/fetch_testdata.sh` downloads real MPAS/ICON/UGRID/FESOM files into the
 gitignored `samples/testdata/`; `--check` renders each. Run it after touching

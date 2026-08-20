@@ -88,7 +88,7 @@ needs neither.
 ## The 60-second check
 
 ```sh
-unsview $S/synthetic.nc -v wave -o /tmp/check.png && echo OK
+unsview $S/synthetic.nc -v wave -o check.png && echo OK
 ```
 
 From a source checkout, a fuller version renders all six fixtures and reports
@@ -579,11 +579,15 @@ with the data.
 ## Everything at once
 
 ```sh
-./tests/run_all_readers.sh          # six fixtures, no network
+./tests/run_all_readers.sh          # six fixtures, no network; also renders one
+                                    # real file per reader once they are fetched
 ./tests/fetch_testdata.sh           # ~71 MB of real model output
 ./tests/fetch_testdata.sh --check   # render every one, report pass/fail
-open /tmp/uv_*.png                  # macOS; xdg-open on Linux
 ```
+
+Renders land in `$TMPDIR` when your site sets one, otherwise in the checkout;
+each script prints the directory it used. Nothing is written to `/tmp`, which is
+not writable everywhere.
 
 `./conda_test.sh` goes further: it builds the conda package, installs it into a
 scratch environment and runs the same assertions against the *packaged* binary.

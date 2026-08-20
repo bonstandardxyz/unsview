@@ -22,11 +22,11 @@ The artifact lands in `$CONDA_PREFIX/conda-bld/<platform>/unsview-0.1.0-*.conda`
 ## Install + smoke test in a fresh env
 
 ```sh
-conda create -n unsview-test -c local unsview
-conda activate unsview-test
+conda create -n unsview-scratch -c local unsview
+conda activate unsview-scratch
 
 unsview -h
-unsview samples/x1.10242.static.nc -v ter -t 0 -o /tmp/ter.png
+unsview samples/x1.10242.static.nc -v ter -t 0 -o ter.png
 ```
 
 The GUI is included on Linux and macOS alike; try:

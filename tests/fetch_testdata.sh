@@ -103,6 +103,11 @@ fi
 # ---- --check: render each and report -----------------------------------------
 [ -x ./unsview ] || { echo "build first: make" >&2; exit 1; }
 fails=0 skips=0
+
+# /tmp is not writable (or not permitted) on plenty of HPC nodes, so honour
+# $TMPDIR when the site sets one and otherwise stay inside the checkout.
+OUT="${TMPDIR:-.}"; OUT="${OUT%/}/unsview_testdata"   # %/ : $TMPDIR often ends in a slash
+mkdir -p "$OUT"
 try() {
     desc=$1; file=$2; shift 2
     if [ ! -s "$file" ]; then
@@ -116,34 +121,34 @@ try() {
 }
 
 echo "real geophysical fields:"
-try "mpas   ter, 10242 cells"        $DIR/x1.10242.static.nc -v ter -c terrain -o /tmp/uv_mpas_ter.png
-try "icon   bathymetry + land mask"  $DIR/icon_R02B04_ocean.nc -v cell_elevation -c terrain -o /tmp/uv_icon_elev.png
-try "ugrid  fesom sst (node data)"   $DIR/fesom_sst.nc --grid $DIR/fesom_mesh_diag.nc -v sst -o /tmp/uv_fesom.png
-try "cs     fv3 orography (tile 1)" $DIR/fv3_oro_data.tile1.nc --grid $DIR/fv3_grid_spec.tile1.nc -v orog_filt -c terrain -o /tmp/uv_fv3_oro.png
+try "mpas   ter, 10242 cells"        $DIR/x1.10242.static.nc -v ter -c terrain -o "$OUT/uv_mpas_ter.png"
+try "icon   bathymetry + land mask"  $DIR/icon_R02B04_ocean.nc -v cell_elevation -c terrain -o "$OUT/uv_icon_elev.png"
+try "ugrid  fesom sst (node data)"   $DIR/fesom_sst.nc --grid $DIR/fesom_mesh_diag.nc -v sst -o "$OUT/uv_fesom.png"
+try "cs     fv3 orography (tile 1)" $DIR/fv3_oro_data.tile1.nc --grid $DIR/fv3_grid_spec.tile1.nc -v orog_filt -c terrain -o "$OUT/uv_fv3_oro.png"
 
 echo "mesh-only / structural cases:"
-try "mpas   QU1920 hexagons"         $DIR/mpas_QU1920.nc -o /tmp/uv_mpas.png
-try "icon   R02B04, 20480 triangles" $DIR/icon_R02B04.nc -v cell_area -o /tmp/uv_icon.png
-try "ugrid  quad-hexagon, face data" $DIR/ugrid_quadhex_face.nc --grid $DIR/ugrid_quadhex_grid.nc -o /tmp/uv_qf.png
-try "ugrid  quad-hexagon, node data" $DIR/ugrid_quadhex_node.nc --grid $DIR/ugrid_quadhex_grid.nc -o /tmp/uv_qn.png
-try "ugrid  geoflow, derived centers" $DIR/ugrid_geoflow_v1.nc --grid $DIR/ugrid_geoflow_grid.nc -o /tmp/uv_gf.png
-try "cs     GEOS c12, 6 faces"       $DIR/geos_c12.nc -v PHIS -c terrain -o /tmp/uv_cs.png
-try "cs     FV3 C48 tile 1 grid"    $DIR/fv3_grid_spec.tile1.nc -v area -o /tmp/uv_fv3.png
+try "mpas   QU1920 hexagons"         $DIR/mpas_QU1920.nc -o "$OUT/uv_mpas.png"
+try "icon   R02B04, 20480 triangles" $DIR/icon_R02B04.nc -v cell_area -o "$OUT/uv_icon.png"
+try "ugrid  quad-hexagon, face data" $DIR/ugrid_quadhex_face.nc --grid $DIR/ugrid_quadhex_grid.nc -o "$OUT/uv_qf.png"
+try "ugrid  quad-hexagon, node data" $DIR/ugrid_quadhex_node.nc --grid $DIR/ugrid_quadhex_grid.nc -o "$OUT/uv_qn.png"
+try "ugrid  geoflow, derived centers" $DIR/ugrid_geoflow_v1.nc --grid $DIR/ugrid_geoflow_grid.nc -o "$OUT/uv_gf.png"
+try "cs     GEOS c12, 6 faces"       $DIR/geos_c12.nc -v PHIS -c terrain -o "$OUT/uv_cs.png"
+try "cs     FV3 C48 tile 1 grid"    $DIR/fv3_grid_spec.tile1.nc -v area -o "$OUT/uv_fv3.png"
 
 echo "corners reconstructed from centers:"
-try "cs     GEOS-IT c180, no corners" $DIR/geos_it_c180_const.nc4 -v PHIS -c terrain -o /tmp/uv_geos180.png
-try "cs     GEOS-IT c180 land mask"   $DIR/geos_it_c180_const.nc4 -v FRLAND -o /tmp/uv_geos180_land.png
-try "cs     FV3 oro_data, no --grid"  $DIR/fv3_oro_data.tile1.nc -v orog_filt -c terrain -o /tmp/uv_fv3_nogrid.png
+try "cs     GEOS-IT c180, no corners" $DIR/geos_it_c180_const.nc4 -v PHIS -c terrain -o "$OUT/uv_geos180.png"
+try "cs     GEOS-IT c180 land mask"   $DIR/geos_it_c180_const.nc4 -v FRLAND -o "$OUT/uv_geos180_land.png"
+try "cs     FV3 oro_data, no --grid"  $DIR/fv3_oro_data.tile1.nc -v orog_filt -c terrain -o "$OUT/uv_fv3_nogrid.png"
 try "cs     FV3 C192, 6 tiles -> globe" \
     $DIR/fv3_C192_oro_data.tile1.nc $DIR/fv3_C192_oro_data.tile2.nc \
     $DIR/fv3_C192_oro_data.tile3.nc $DIR/fv3_C192_oro_data.tile4.nc \
     $DIR/fv3_C192_oro_data.tile5.nc $DIR/fv3_C192_oro_data.tile6.nc \
-    --tiles -v orog_filt -c terrain -o /tmp/uv_fv3_globe.png
+    --tiles -v orog_filt -c terrain -o "$OUT/uv_fv3_globe.png"
 
 echo
 [ "$skips" -gt 0 ] && echo "$skips skipped -- run '$0' without --check first"
 if [ "$fails" -eq 0 ]; then
-    echo "all rendered. PNGs are in /tmp/uv_*.png -- open them: a correct render"
+    echo "all rendered. PNGs are in $OUT/ -- open them: a correct render"
     echo "has no polygons stretched across the map at +-180 degrees."
 else
     echo "$fails failed" >&2

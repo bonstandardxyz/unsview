@@ -17,7 +17,13 @@ cd "$here"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ok: $*"; }
 
-TESTENV="${UNSVIEW_TESTENV:-unsview-test}"
+TESTENV="${UNSVIEW_TESTENV:-unsview-scratch}"
+
+# Render targets. /tmp is not writable (or not permitted) on plenty of HPC
+# nodes, so honour $TMPDIR when the site sets one and otherwise stay inside the
+# checkout. Never hardcode /tmp.
+OUT="${TMPDIR:-$here}"; OUT="${OUT%/}/unsview_check"   # %/ : $TMPDIR often ends in a slash
+mkdir -p "$OUT"
 
 # ---- 0. prerequisites -------------------------------------------------------
 command -v conda >/dev/null 2>&1 \
@@ -55,46 +61,46 @@ ok "bundled overlay data installed"
 test -f "$PREFIX/share/unsview/samples/synthetic.nc" \
     || fail "synthetic fixtures not installed under \$PREFIX/share/unsview/samples"
 run unsview --no-rc "$PREFIX/share/unsview/samples/synthetic.nc" -v wave -t 0 \
-    -o /tmp/unsview_installed.png || fail "installed fixture failed to render"
-test -s /tmp/unsview_installed.png || fail "installed-fixture PNG is empty"
+    -o "$OUT/unsview_installed.png" || fail "installed fixture failed to render"
+test -s "$OUT/unsview_installed.png" || fail "installed-fixture PNG is empty"
 ok "bundled fixtures installed and render"
 
 # --no-rc throughout: a developer's ~/.unsviewrc setting `cmap = jet` or
 # `width = 1920` would otherwise change the byte sizes compared below.
 
 # headless PNG render — overlays are drawn by default
-run unsview --no-rc samples/synthetic.nc -v wave -t 0 -o /tmp/unsview_on.png \
+run unsview --no-rc samples/synthetic.nc -v wave -t 0 -o "$OUT/unsview_on.png" \
     || fail "headless render failed"
-test -s /tmp/unsview_on.png || fail "/tmp/unsview_on.png is empty"
-on=$(wc -c < /tmp/unsview_on.png)
+test -s "$OUT/unsview_on.png" || fail "$OUT/unsview_on.png is empty"
+on=$(wc -c < "$OUT/unsview_on.png")
 ok "headless PNG render ($on bytes)"
 
 # Feature check: default overlays vs --no-coast-data must differ
-run unsview --no-rc samples/synthetic.nc -v wave -t 0 --no-coast-data -o /tmp/unsview_off.png \
+run unsview --no-rc samples/synthetic.nc -v wave -t 0 --no-coast-data -o "$OUT/unsview_off.png" \
     || fail "--no-coast-data render failed"
-off=$(wc -c < /tmp/unsview_off.png)
+off=$(wc -c < "$OUT/unsview_off.png")
 [ "$on" -ne "$off" ] \
     || fail "overlays-on and --no-coast-data produced identical PNGs (overlays not default-on)"
 ok "overlays on by default (on=$on vs off=$off bytes)"
 
 # time-varying sample renders
-run unsview --no-rc samples/synthetic.nc -v wave -t 1 -o /tmp/unsview_wave.png \
+run unsview --no-rc samples/synthetic.nc -v wave -t 1 -o "$OUT/unsview_wave.png" \
     || fail "synthetic render failed"
-test -s /tmp/unsview_wave.png || fail "wave PNG is empty"
+test -s "$OUT/unsview_wave.png" || fail "wave PNG is empty"
 ok "time-varying sample renders"
 
 # every mesh reader loads (cs is a different mesh, same field function)
 for enc in icon ugrid cs cs_centers fvcom; do
     run unsview --no-rc "samples/synthetic_$enc.nc" -v wave -t 0 \
-        -o "/tmp/unsview_$enc.png" || fail "$enc render failed"
-    test -s "/tmp/unsview_$enc.png" || fail "$enc PNG is empty"
+        -o "$OUT/unsview_$enc.png" || fail "$enc render failed"
+    test -s "$OUT/unsview_$enc.png" || fail "$enc PNG is empty"
     ok "$enc mesh renders"
 done
 
 # node-centered data is averaged onto faces rather than rejected
 run unsview --no-rc samples/synthetic_ugrid.nc -v wave_node -t 0 \
-    -o /tmp/unsview_node.png || fail "node-centered render failed"
-test -s /tmp/unsview_node.png || fail "node PNG is empty"
+    -o "$OUT/unsview_node.png" || fail "node-centered render failed"
+test -s "$OUT/unsview_node.png" || fail "node PNG is empty"
 ok "node-centered variable renders"
 
 # The X11 GUI must be compiled into the package. Every check above passes just
