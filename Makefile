@@ -92,7 +92,7 @@ all: unsview
 	  echo "  The GUI is unsview's default mode, and this build does not have it." && \
 	  echo "  Only headless output (-o PATH) will work. To get the GUI:" && \
 	  echo "    conda install -c conda-forge unsview     # ships the GUI on Linux and macOS" && \
-	  echo "    or install X11/Xaw headers and rebuild   # see INSTALL_HPC.md" && \
+	  echo "    or install X11/Xaw headers and rebuild   # see README.md" && \
 	  echo "")
 
 unsview: $(OBJS)

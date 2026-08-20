@@ -36,7 +36,7 @@ unsview -h                    # options; --model lists the conventions
 > conda create -n unsview -c local -c conda-forge unsview
 > ```
 >
-> `./conda_test.sh` does the same thing and then asserts the result — build,
+> `./conda_check.sh` does the same thing and then asserts the result — build,
 > install into a scratch env, render every fixture, confirm the GUI is compiled
 > in. It prints `PASS`.
 
@@ -280,17 +280,24 @@ for feat in d['features']:
 ### GUI controls
 
 - **Variable list (left pane)** — click to switch field
-- **`<< t` / `t >>`** — step through time
-- **`<< lvl` / `lvl >>`** — step through vertical levels
-- **`cmap`** — cycle viridis → jet → rdbu → gray
-- **`reset view`** — return to global extent
+- **`<< t` / `t >>`** — step through time (or the 1st extra dimension)
+- **`<< lvl` / `lvl >>`** — step through vertical levels (or the 2nd)
+- **`cmap <` / `cmap >`** — cycle all 18 palettes in either direction
+- **`reset view`** — return to the global extent
+- **`fit data`** — regional auto-fit to the mesh's own extent
+- **`zoom +` / `zoom -`** — zoom about the center
+- **`set range...`** — enter an exact vmin/vmax; **`auto range`** restores the
+  data extent
+- **`save png...`** — write the canvas exactly as displayed, keeping the current
+  zoom, pan, overlays and colormap
 - **`coast` / `borders` / `states`** — cycle each overlay white → black → off
 - **Mouse drag on map** — pan
 - **Scroll wheel** — zoom
 - **Left-click a cell** — pop up a vertical profile (value vs level) and/or time
   series (value vs time) for that cell; the popup's toggle switches between them
   when the variable has both dimensions
-- **Status bar** — live `lon, lat, cell, value` under the cursor
+- **Status bar** — live `lon, lat, cell, value` under the cursor, plus variable,
+  time, level, vmin/vmax and colormap name
 
 ---
 
@@ -589,7 +596,7 @@ Renders land in `$TMPDIR` when your site sets one, otherwise in the checkout;
 each script prints the directory it used. Nothing is written to `/tmp`, which is
 not writable everywhere.
 
-`./conda_test.sh` goes further: it builds the conda package, installs it into a
+`./conda_check.sh` goes further: it builds the conda package, installs it into a
 scratch environment and runs the same assertions against the *packaged* binary.
 
 ## What a wrong render looks like
@@ -727,9 +734,227 @@ S="$HOME/.local/share/unsview/samples"
 ```
 
 HPC sites often split the X11 libraries across separate trees; `./install.sh
---help` lists a prefix flag per library, and `INSTALL_HPC.md` covers the rest.
+--help` lists a prefix flag per library, and [Installing on an HPC
+node](#installing-on-an-hpc-node) covers the rest.
 `tests/` and its scripts are source-checkout only — they are not part of any
 package.
+
+## Building the conda package
+
+The recipe builds from the working tree (`source: path: ..`), so you can iterate
+without tagging a release.
+
+```sh
+conda install -n base conda-build      # once
+conda build recipe -c conda-forge
+```
+
+The artifact lands in `$CONDA_PREFIX/conda-bld/<platform>/unsview-0.1.0-*.conda`.
+Install it into a scratch environment and try it:
+
+```sh
+conda create -n unsview-scratch -c local -c conda-forge unsview
+conda activate unsview-scratch
+unsview -h
+```
+
+`./conda_check.sh` automates that whole cycle and asserts the result — see
+[Everything at once](#everything-at-once).
+
+To validate against the same image conda-forge CI uses, which catches glibc and
+compiler-pin problems before they reach a pull request:
+
+```sh
+docker run --rm -v "$PWD":/work -w /work \
+    condaforge/linux-anvil-x86_64:alma9 \
+    bash -c "conda build recipe -c conda-forge"
+```
+
+A native macOS build exercises the X11 stack too, since conda-forge ships
+osx-64/osx-arm64 `xorg-libxaw`, so it catches most recipe mistakes on its own.
+Reach for the container when you need the Linux package's own pins validated.
+Either way, check the log for `X11 GUI: enabled`.
+
+**Publishing.** Tag the release on GitHub, then in `recipe/meta.yaml` swap the
+`source: path: ..` block for the tagged tarball:
+
+```yaml
+source:
+  url: https://github.com/bonstandardxyz/unsview/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: <shasum -a 256 of that tarball>
+```
+
+conda-forge builds from tarballs only, never from a local path. Then open a pull
+request against `conda-forge/staged-recipes` with this `recipe/` directory copied
+in as `recipes/unsview/`.
+
+## Installing on an HPC node
+
+Three runtime dependencies, all of which exist on essentially every Linux
+cluster. No Python, no conda, no Java, no JIT, no GPU.
+
+| Dependency | How to find it on HPC |
+|---|---|
+| C99 compiler | `gcc` / `cc` is always present on a login node |
+| `libnetcdf` | `module load netcdf` |
+| `libpng` | always in `/usr/lib*` — no module needed |
+| X11 / Xt / Xaw (GUI, optional) | always in `/usr/lib*` |
+
+### 1. Load modules
+
+Names vary per site:
+
+```sh
+module avail netcdf            # find the right name
+module load gcc netcdf         # adjust to your site
+
+module load netcdf-c           # NCAR Derecho, Casper
+module load cray-netcdf        # Perlmutter, Frontier
+module load intel netcdf       # Stampede3, Frontera
+```
+
+After loading, one of `$NETCDF`, `$NETCDF_DIR` or `$NETCDF_C_DIR` is usually set.
+Confirm with `nc-config --prefix`.
+
+### 2. Build
+
+The bundled one-shot installer is the fastest path:
+
+```sh
+./install.sh                          # installs to $HOME/.local
+./install.sh --prefix=$HOME/sw        # or pick a prefix
+```
+
+It auto-detects the compiler, netCDF (via `nc-config` or the usual `$NETCDF*`
+variables), libpng and the X11 headers, then builds and installs.
+
+Where a site splits the X libraries across separate prefixes — each of libXaw /
+libXt / libX11 / libXmu / libXext in its own tree — point at each explicitly:
+
+```sh
+./install.sh \
+    --xaw-prefix=/sw/libXaw-1.0.16 \
+    --xt-prefix=/sw/libXt-1.3.0 \
+    --x11-prefix=/sw/libX11-1.8.7 \
+    --xmu-prefix=/sw/libXmu-1.2.1 \
+    --xext-prefix=/sw/libXext-1.3.6 \
+    --xproto-prefix=/sw/xorgproto-2024.1 \
+    --force-x11                          # skip auto-detection
+```
+
+`--xproto-prefix` covers the protocol header package (`X11/X.h`,
+`X11/Xfuncproto.h`, `X11/Xosdefs.h`). Most distros bundle it with libX11-devel,
+but spack and easybuild ship it as a separate header-only `xorgproto` (older:
+`xproto`). `--force-x11` skips the Xaw header sanity check, for non-standard
+layouts. `./install.sh --help` lists every flag.
+
+#### Spack-managed X libraries
+
+Spack installs each package under a long hashed prefix ending in the usual
+`include/` + `lib/` layout. Two equivalent options:
+
+```sh
+# A -- let spack set the environment, then build
+spack load libxaw libxt libx11 libxmu libxext libsm libice
+./install.sh --force-x11
+```
+
+`spack load` populates `CPATH` and `LIBRARY_PATH`, so the compiler finds
+everything; `--force-x11` is still needed because the auto-detector only looks in
+`/usr/include` and cannot see spack-loaded paths.
+
+```sh
+# B -- pass the prefixes explicitly
+./install.sh \
+    --xaw-prefix=$(spack location -i libxaw)  \
+    --xt-prefix=$(spack location -i libxt)    \
+    --x11-prefix=$(spack location -i libx11)  \
+    --xmu-prefix=$(spack location -i libxmu)  \
+    --xext-prefix=$(spack location -i libxext)\
+    --sm-prefix=$(spack location -i libsm)    \
+    --ice-prefix=$(spack location -i libice)  \
+    --force-x11
+```
+
+If those libraries are not on the runtime linker path, add rpaths so the binary
+finds them without `LD_LIBRARY_PATH`:
+
+```sh
+    --x11-ldflags="-Wl,-rpath,$(spack location -i libxaw)/lib \
+                   -Wl,-rpath,$(spack location -i libxt)/lib \
+                   -Wl,-rpath,$(spack location -i libx11)/lib"
+```
+
+To drive `make` yourself instead:
+
+```sh
+make NETCDF_PREFIX="$(nc-config --prefix)"
+```
+
+Without `nc-config`, point `NETCDF_PREFIX` at the install root by hand — the
+directory holding `include/netcdf.h` and `lib/libnetcdf.so`.
+
+### 3. Install to user-space
+
+```sh
+make install DEST=$HOME/.local
+echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+hash -r
+which unsview
+```
+
+No `sudo` needed; the binary is ~200 KB.
+
+### 4. Run
+
+Interactively, over X11 forwarding — XQuartz on a Mac, any X server on
+Linux/WSL. The buttons are the ones listed under [GUI
+controls](#gui-controls):
+
+```sh
+ssh -Y user@hpc
+unsview ~/run/x1.40962.diag.2024-01-15_00.00.00.nc \
+        --grid ~/grids/x1.40962.grid.nc
+```
+
+Headless is the better choice for large meshes or slow links, since X11
+forwarding is bandwidth-bound:
+
+```sh
+unsview diag.nc --grid grid.nc -v t2m -t 0 -W 1920 -H 960 -o qc.png
+scp user@hpc:qc.png .          # or: ssh user@hpc 'cat qc.png' | imgcat
+```
+
+Inside a Slurm batch script:
+
+```bash
+#!/bin/bash
+#SBATCH -t 00:05:00 -n 1
+module load gcc netcdf
+for t in 0 6 12 18; do
+    unsview daily.nc -v t2m -t $t \
+            --vmin 250 --vmax 320 \
+            -W 1920 -H 960 -o frame_$t.png
+done
+```
+
+### HPC troubleshooting
+
+| Symptom | Likely cause and fix |
+|---|---|
+| `netcdf.h: No such file or directory` | `module load netcdf` not done, or `NETCDF_PREFIX` wrong |
+| `cannot find -lnetcdf` at link time | same — verify with `ls $NETCDF_PREFIX/lib*/libnetcdf.*` |
+| `cannot find -lpng` | `dnf install libpng-devel`, or load a libpng module |
+| `cannot find X11 / Xaw` headers | only affects the GUI; the headless build still succeeds |
+| `cannot open display` at runtime | you did not `ssh -Y`, or no X server is running |
+| GUI feels laggy over SSH | switch to headless `-o out.png` |
+
+### Login-node etiquette
+
+unsview is well within login-node norms: ~20 MB for a 10K-cell mesh and ~100 MB
+for a 1M-cell mesh, idle when not panning, ~100 ms per redraw, one netCDF open
+with reads on demand, no GPU, no temp files, nothing spawned. Batch-rendering
+hundreds of PNGs belongs in a Slurm/PBS job rather than on the login node.
 
 ## Layout
 
@@ -772,6 +997,155 @@ encodings, so they should render the same picture. They fall into two groups:
   of pixels.
 
 A larger divergence than that is a reader bug, not floating-point noise.
+
+## Internals
+
+Data flows one way: `main.c` merges `.unsviewrc` with argv and parses →
+`nc_io` opens files and enumerates plottable variables → `mesh.c` loads the
+mesh → `raster.c` paints an RGB buffer → either `png_export.c` writes it or
+`gui_x11.c` blits it into an `XImage`.
+
+- **`nc_io.{c,h}`** — one `NcFile` per netCDF file; `MultiNc` concatenates N
+  files along the time axis (`t_offsets`, `multinc_resolve`). Cross-file lookup
+  is **by variable name**, not index, because var ids differ between files; a
+  variable missing from a later file yields a NaN slab rather than an error.
+- **`mesh.{c,h}`** — five readers all filling one `UnsMesh`, which is the UGRID
+  face/node model: face centers, node coordinates, `vertices_on_cell` and
+  `n_edges_on_cell`. Also caches the face-center extent used for regional
+  auto-fit, and holds `mesh_node_to_face`.
+- **`raster.{c,h}`** — the whole renderer: scanline polygon fill, Bresenham
+  lines, a built-in 5×7 bitmap font, and the colorbar. No graphics library.
+- **`colormap.{c,h}`** — 18 palettes built by interpolating control-point quads.
+- **`polylines.{c,h}`** — overlay loader plus the `PolyLayer` type.
+- **`gui_x11.c`** — Xt/Xaw GUI, ~1100 lines, one file, one global `App g_app`.
+  Compiled only under `UNSVIEW_HAVE_X11`.
+
+### Invariants worth knowing before editing
+
+- **Radians everywhere internally.** Polyline files are degrees on disk and
+  converted at load; the GUI converts back only for display strings. UGRID
+  meshes are degrees too — `read_coord_var` converts when the `units` attribute
+  starts with `degree`, the single place that invariant can break. With **no**
+  `units` attribute at all (FV3's `oro`/`sfc` files omit it on
+  `geolon`/`geolat`) it falls back to magnitude: radians cannot exceed 2π, so
+  anything larger is degrees. That sniff runs only on the missing-attribute
+  path.
+- **Connectivity is 0-based inside `UnsMesh`, with `-1` for unused slots.** Each
+  reader normalizes: MPAS and ICON subtract 1, UGRID subtracts its
+  `start_index` (which *defaults to 0*, unlike the other two). Don't
+  re-subtract downstream.
+- **Connectivity is read through `nc_get_var_longlong`, never
+  `nc_get_var_int`.** Real files use int, uint (`_FillValue` 4294967295) and
+  int64 (`_FillValue` INT64_MIN); the int reader returns `NC_ERANGE` on the
+  latter two.
+- **ICON's `vertex_of_cell` is `(nv, cell)`** — transposed relative to MPAS's
+  `verticesOnCell(nCells, maxEdges)`. `load_icon` picks the face axis by
+  matching a dimension length to the cell count rather than trusting position.
+- **Model detection order is UGRID → MPAS → ICON → cs → fvcom.** UGRID first
+  because it self-describes via `cf_role="mesh_topology"`; the others are name
+  heuristics. `--model` skips detection.
+- **A cubed sphere has no connectivity array.** `load_cubedsphere` synthesises
+  quads from the corner array by index arithmetic, flattening cells as
+  (face, y, x). `nc_read_slab` reads the face-dim block whole and in file order
+  so the two orderings agree — change one and you must change both.
+- **Cubed-sphere corners are often absent and then reconstructed.** Operational
+  GEOS keeps geometry in a separate gridspec file and ships `lons`/`lats` only;
+  FV3 `oro`/`sfc` ship `geolon`/`geolat`. `load_cubedsphere` picks a geometry
+  source in order — `corner_lons`, `grid_lon`, else derive from centers via
+  `corners_from_centers`.
+- **`corners_from_centers` works in 3-D Cartesian, deliberately.** Averaging
+  longitudes breaks at the date line and degenerates at the poles. Centers are
+  extended by one linearly-extrapolated ghost ring so edge corners don't
+  collapse onto edge centers, then each corner is the normalized mean of its
+  four neighbours. Error is O(h²): at c12 the worst corner is 1.7% of a cell
+  out. Faces extrapolate independently, so a shared edge can disagree by O(h²)
+  — which is why a stitched globe is not exactly watertight.
+- **GEOS and FV3 are the same geometry, spelled differently.** GEOS:
+  `corner_lons`/`lons`, 3-D with a leading `nf`. FV3: `grid_lon`/`grid_lont`,
+  2-D, one file per tile. FV3's `oro`/`sfc` files name their centers `geolon`
+  and dimension them `lat`/`lon`, which is why `mesh_probe_dims` tries three
+  center-variable names and why a failed `--grid` dimension hint falls back to
+  the file's own probe instead of being fatal. `C48_grid.tileN.nc` is the
+  supergrid (2× model resolution); `C48_grid_spec.tileN.nc` has model cells.
+- **The face index can span several dimensions.** `NcFile.ncells_dim_ids` is a
+  list, `ncells` their product, and a flat cell index is the C-order flattening
+  across them. Everything else still sees one flat cell index.
+- **Polar corners are split.** A node exactly on a pole is a point, but
+  equirectangular renders a pole as the whole top edge, so an unsplit polar cell
+  collapses to a triangle and leaves ~4% of the map unpainted. Each polar corner
+  becomes two nodes carrying its ring-neighbours' longitudes, which is why
+  `max_edges` is 5 for a quad mesh. The `POLE_LAT` test is a **tolerance
+  (1e-6 rad), not equality** — a corner read from a file sits exactly on the
+  pole, but a reconstructed one only gets within ~1e-8 rad, and missing that
+  silently reinstates the wedge.
+- **`--tiles` is explicit, never inferred.** Six tile files are
+  indistinguishable from six single-step time files, so guessing would silently
+  mislabel a time axis. Under `--tiles`, `MultiNc.tile_mode` concatenates along
+  the **cell** axis rather than time, `--grid` accepts one file per tile, and
+  `mesh_load_tiles` rebases vertex ids per tile. Global cell index is tile-major
+  then (y, x) — the order `multinc_read_slab` assembles data in.
+- **Face centers derived from nodes must unwrap first.** A naive mean puts a
+  date-line-straddling face near lon 0, and `raster_render_mesh` uses the face
+  center as its unwrap reference, so the polygon tears across the map.
+- **Date-line handling.** Each cell's vertices are unwrapped to within ±π of its
+  own center, then the polygon is drawn three times at `shift ∈ {-1,0,+1} × 2π`
+  with a bbox reject. That is what makes wrap-around and Pacific-centered
+  regional meshes work; keep the triple draw if you touch it.
+- **`Raster` carries an `alpha` plane** (0/1 painted flag), so PNG export and the
+  X11 blit can paint an explicit background under unpainted pixels.
+- **Two different extra-dim indexing strategies, on purpose.** `nc_read_slab`
+  maps non-`nCells` dims *positionally* (1st extra ← time, 2nd ← level) so
+  `(nCells,nMonths)` and `(Time,nVertLevels,nCells)` both work.
+  `multinc_read_cell_value` maps *by dim id* instead, because the click-to-plot
+  popup must not misassign time vs level on level-only or time-only variables.
+- **The variable picker is numeric vars carrying the face *or* node dim, minus
+  two filters, sorted A–Z.** The static `MESH_VARS` blacklist covers MPAS;
+  everything else is filtered after the fact by `multinc_hide_mesh_vars` using
+  the names the reader reports in `UnsMesh.mesh_vars`. That indirection exists
+  because UGRID files choose their own mesh variable names, and because
+  `nc_open_file` runs before any mesh is loaded.
+- **A node dim is only reported for node-centered formats.** MPAS's `nVertices`
+  and ICON's `vertex` are deliberately *not* reported: those models put fields
+  on cells only, so surfacing their vertex dim would fill the picker with mesh
+  metadata.
+- **`--grid` is opened before the data files** so its mesh dimension names can be
+  passed to `nc_open_file` as hints. Stream-split UGRID data files carry no
+  topology variable, so only the grid file knows what the mesh dims are called.
+- **`.unsviewrc` is expanded into argv and parsed by the ordinary option loop**,
+  before the real arguments. Nothing about option semantics is duplicated, and
+  the command line wins by being parsed second. `--no-rc` is detected in a
+  separate pre-scan since it must act before the file is read.
+- **Overlay resolution order** is `$UNSVIEW_DATA_DIR` → compile-time
+  `UNSVIEW_DATA_DIR` → `./samples`. The bundled trio loads **by default**; an
+  explicit `--coast/--borders/--states` suppresses the bundled layer *of that
+  same type*, `--lines` suppresses nothing, and `--no-coast-data` disables all
+  three.
+- **`colormap_by_name` silently falls back to viridis for an unrecognised
+  name**, so a typo in `-c` is not an error, just an unexpected picture.
+- Fixed caps: `MAX_POLY 32` vertices per cell, `MAX_LAYERS 16`, `MAX_FILES 64`,
+  `MAX_RC_ARGS 64`, `MAX_PALETTES 24`, `MESH_MAX_MESHVARS 32`.
+
+### Adding a mesh reader
+
+Write `load_<model>(int ncid, UnsMesh *m)` in `mesh.c` filling the struct, add a
+branch to `detect_model` and to the `mesh_load` dispatch, and call
+`record_mesh_var` for every variable you consumed so the picker hides it. If the
+model needs its own dimension names, extend `mesh_probe_dims`. Then add an
+encoding to `tests/make_sample.c` so CI covers it, and a `--model` line to
+`usage()` in `main.c`. Nothing in `raster.c` or `gui_x11.c` should need to
+change.
+
+### Adding a colormap
+
+Add one `add_lut("name", ctrl_points, n_points)` call in `colormap_init()`. The
+GUI's cmap cycle picks it up automatically via
+`colormap_count()`/`colormap_name_at()`; the only manual step is updating the
+`-c` list in `usage()` in `main.c`.
+
+`usage()` in `src/main.c` is the authoritative CLI surface. It and this file both
+list 18 colormaps, which is right — but only 16 come from `add_lut` calls, so
+grepping for those undercounts: `gray` and `3gauss` are registered by their own
+helpers.
 
 ## Out of scope
 
@@ -831,7 +1205,7 @@ S="$CONDA_PREFIX/share/unsview/samples"     # ships with the package
 | All six fixtures, pass/fail per reader | `./tests/run_all_readers.sh` |
 | Download real model output | `./tests/fetch_testdata.sh` |
 | Render every real file, pass/fail | `./tests/fetch_testdata.sh --check` |
-| Build the conda package and test it | `./conda_test.sh` |
+| Build the conda package and check it | `./conda_check.sh` |
 | Measure corner reconstruction error | `./tests/check_corners samples/testdata/geos_c12.nc` |
 | Regenerate a fixture | `./tests/make_sample OUT.nc [mpas\|icon\|ugrid\|fvcom\|cs\|cs_centers]` |
 | Is the GUI compiled in? | `DISPLAY= unsview $S/synthetic.nc -v wave` |

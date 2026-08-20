@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
     int n_layer_spec = 0;
 
     /* --no-rc has to be spotted before the rc file is read, so it gets its own
-     * scan. Batch runs and conda_test.sh need it: a developer's ~/.unsviewrc
+     * scan. Batch runs and conda_check.sh need it: a developer's ~/.unsviewrc
      * setting `cmap = jet` would otherwise silently change rendered output. */
     int use_rc = 1;
     for (int i = 1; i < argc; i++)

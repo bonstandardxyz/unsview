@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Automated conda build + smoke test for unsview.
+# Automated conda build + smoke check for unsview.
 # Works on Linux and macOS; both build the full GUI.
 # Run from the project root — the directory that contains recipe/ and samples/:
 #
-#     ./conda_test.sh
+#     ./conda_check.sh
 #
 # Prereqs: Miniconda installed and `conda activate base` done, plus conda-build:
 #     conda install -n base -c conda-forge conda-build -y
 #
-# Override the scratch env name with:  UNSVIEW_TESTENV=myenv ./conda_test.sh
+# Override the scratch env name with:  UNSVIEW_ENV=myenv ./conda_check.sh
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -17,7 +17,7 @@ cd "$here"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ok: $*"; }
 
-TESTENV="${UNSVIEW_TESTENV:-unsview-scratch}"
+SCRATCHENV="${UNSVIEW_ENV:-unsview-scratch}"
 
 # Render targets. /tmp is not writable (or not permitted) on plenty of HPC
 # nodes, so honour $TMPDIR when the site sets one and otherwise stay inside the
@@ -38,15 +38,15 @@ echo "== 1/4 building conda package (recipe sources from this working tree) =="
 conda build recipe -c conda-forge
 
 # ---- 2. install into a fresh env -------------------------------------------
-echo "== 2/4 creating test env '$TESTENV' from the local build =="
-conda env remove -n "$TESTENV" -y >/dev/null 2>&1 || true
-conda create -y -n "$TESTENV" -c local -c conda-forge unsview
+echo "== 2/4 creating scratch env '$SCRATCHENV' from the local build =="
+conda env remove -n "$SCRATCHENV" -y >/dev/null 2>&1 || true
+conda create -y -n "$SCRATCHENV" -c local -c conda-forge unsview
 
-run() { conda run -n "$TESTENV" "$@"; }
-PREFIX="$(conda run -n "$TESTENV" printenv CONDA_PREFIX)"
+run() { conda run -n "$SCRATCHENV" "$@"; }
+PREFIX="$(conda run -n "$SCRATCHENV" printenv CONDA_PREFIX)"
 
-# ---- 3. smoke tests ---------------------------------------------------------
-echo "== 3/4 smoke tests =="
+# ---- 3. smoke checks --------------------------------------------------------
+echo "== 3/4 smoke checks =="
 
 run unsview -h >/dev/null || fail "unsview -h"
 ok "unsview -h runs"
@@ -119,8 +119,8 @@ echo "== 4/4 PASS =="
 echo
 echo "Click-to-plot is interactive (GUI only) and not covered by this script."
 echo "With a display -- 'ssh -Y' on Linux, XQuartz running on macOS -- try:"
-echo "    conda run -n $TESTENV unsview samples/synthetic.nc -v wave"
+echo "    conda run -n $SCRATCHENV unsview samples/synthetic.nc -v wave"
 echo "  then left-click a cell -> a time-series popup opens."
 echo
 echo "Clean up the scratch env with:"
-echo "    conda env remove -n $TESTENV -y"
+echo "    conda env remove -n $SCRATCHENV -y"
