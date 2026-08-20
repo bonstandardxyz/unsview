@@ -61,8 +61,14 @@ jobs:
           name: conda-linux-64
           path: build-artifacts/linux-64/*.conda
       - name: Upload to anaconda.org
+        # Run through `conda run -n base` rather than calling `anaconda`
+        # directly. The login shell sources conda.sh, which puts only condabin on
+        # PATH -- enough for `conda` and its `build` subcommand, but base/bin,
+        # where anaconda-client installs its script, is absent. macOS hits the
+        # same wall from the other side: setup-miniconda leaves its own env
+        # active, so base/bin is never on PATH there either.
         if: startsWith(github.ref, 'refs/tags/v') && env.ANACONDA_TOKEN != ''
-        run: anaconda -t "$ANACONDA_TOKEN" upload --force build-artifacts/linux-64/*.conda
+        run: conda run --no-capture-output -n base anaconda -t "$ANACONDA_TOKEN" upload --force build-artifacts/linux-64/*.conda
 
   osx-arm64:
     runs-on: macos-14
@@ -96,8 +102,14 @@ jobs:
           name: conda-osx-arm64
           path: build-artifacts/osx-arm64/*.conda
       - name: Upload to anaconda.org
+        # Run through `conda run -n base` rather than calling `anaconda`
+        # directly. The login shell sources conda.sh, which puts only condabin on
+        # PATH -- enough for `conda` and its `build` subcommand, but base/bin,
+        # where anaconda-client installs its script, is absent. macOS hits the
+        # same wall from the other side: setup-miniconda leaves its own env
+        # active, so base/bin is never on PATH there either.
         if: startsWith(github.ref, 'refs/tags/v') && env.ANACONDA_TOKEN != ''
-        run: anaconda -t "$ANACONDA_TOKEN" upload --force build-artifacts/osx-arm64/*.conda
+        run: conda run --no-capture-output -n base anaconda -t "$ANACONDA_TOKEN" upload --force build-artifacts/osx-arm64/*.conda
 
   release:
     # Attach both packages to the GitHub Release, so anyone can download them
