@@ -749,7 +749,7 @@ conda install -n base conda-build      # once
 conda build recipe -c conda-forge
 ```
 
-The artifact lands in `$CONDA_PREFIX/conda-bld/<platform>/unsview-0.1.0-*.conda`.
+The artifact lands in `$CONDA_PREFIX/conda-bld/<platform>/unsview-0.1.1-*.conda`.
 Install it into a scratch environment and try it:
 
 ```sh
