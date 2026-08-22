@@ -9,6 +9,10 @@ second later, decide whether the file is what you thought. For publication
 figures, reach for a higher-level library; for *"is this file what I think it
 is?"*, this is the tool.
 
+**[See what it renders](https://bonstandard.xyz/unsview)** — every supported
+convention on real model data, each figure captioned with the command that drew
+it.
+
 ## Why
 
 `ncview` only handles regular `(j, i)` grids. MPAS / ICON / FVCOM / FESOM /
