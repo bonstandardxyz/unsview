@@ -808,15 +808,19 @@ in as `recipes/unsview/`.
 
 ## Installing on an HPC node
 
-Three runtime dependencies, all of which exist on essentially every Linux
-cluster. No Python, no conda, no Java, no JIT, no GPU.
+Two libraries and a C99 compiler, plus X11 if you want the GUI. No Python, no
+conda, no Java, no JIT, no GPU.
+
+These are *build* dependencies — unsview is compiled from source here, so each
+one has to be present as a header as well as a library, and clusters routinely
+carry the `.so` without the matching `-devel` package.
 
 | Dependency | How to find it on HPC |
 |---|---|
-| C99 compiler | `gcc` / `cc` is always present on a login node |
-| `libnetcdf` | `module load netcdf` |
-| `libpng` | always in `/usr/lib*` — no module needed |
-| X11 / Xt / Xaw (GUI, optional) | always in `/usr/lib*` |
+| C99 compiler | `cc --version`. On Cray, `cc` is a PrgEnv wrapper rather than a compiler; `module load PrgEnv-gnu` selects the GNU one |
+| `libnetcdf` | `module load netcdf`, then confirm with `nc-config --prefix` |
+| `libpng` | `ls /usr/include/png.h`. Usually present and needs no module; if only the library is installed, try `module avail libpng` |
+| X11 / Xt / Xaw (GUI, optional) | `ls /usr/include/X11/Xaw/Form.h`. Xaw is a legacy toolkit and is missing from plenty of compute images; without it the build drops the GUI and headless `-o` still works |
 
 ### 1. Load modules
 
